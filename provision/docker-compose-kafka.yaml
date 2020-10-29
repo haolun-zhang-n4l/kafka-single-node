@@ -1,0 +1,89 @@
+# see: https://docs.confluent.io/5.0.0/installation/docker/docs/installation/single-node-client.html
+
+version: "2"
+services:
+  zookeeper:
+    hostname: zookeeper
+    image: confluentinc/cp-zookeeper:5.0.0
+    container_name: zookeeper
+    ports:
+      - 2181:2181
+    networks:
+      - confluent
+
+  kafka:
+    hostname: kafka
+    image: confluentinc/cp-kafka:5.0.0
+    container_name: kafka
+    depends_on: 
+      - "zookeeper"
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper=2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+    ports:
+      - 9092:9092
+    networks:
+      - confluent
+
+  schema-registry:
+    hostname: schema-registry
+    image: confluentinc/cp-schema-registry:5.0.0
+    container_name: schema-registry
+    depends_on: 
+      - "zookeeper"
+      - "kafka"
+    environment:
+      - SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL=zookeeper:2181
+      - SCHEMA_REGISTRY_HOST_NAME=schema-registry
+      - SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:8081
+    ports:
+      - 8081:8081
+    networks:
+      - confluent
+
+  kafka-rest:
+    hostname: kafka-rest
+    image: confluentinc/cp-kafka-rest:5.0.0
+    container_name: kafka-rest
+    depends_on: 
+      - "zookeeper"
+      - "kafka"
+      - "schema-registry"
+    environment:
+      - KAFKA_REST_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_REST_LISTENERS=http://0.0.0.0:8082
+      - KAFKA_REST_SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - KAFKA_REST_HOST_NAME=kafka-rest
+    ports:
+      - 8082:8082
+    networks:
+      - confluent
+
+  control-center:
+    hostname: control-center
+    image: confluentinc/cp-enterprise-control-center:5.0.0
+    container_name: control-center
+    depends_on: 
+      - "zookeeper"
+      - "kafka"
+      - "schema-registry"
+      - "kafka-rest"
+    environment:
+      - CONTROL_CENTER_ZOOKEEPER_CONNECT=zookeeper:2181
+      - CONTROL_CENTER_BOOTSTRAP_SERVERS=kafka:9092
+      - CONTROL_CENTER_REPLICATION_FACTOR=1
+      - CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS=1
+      - CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS=1
+      - CONTROL_CENTER_STREAMS_NUM_STREAM_THREADS=2
+      - CONTROL_CENTER_CONNECT_CLUSTER=http://kafka-connect:8082
+    ports:
+      - 9021:9021
+    networks:
+      - confluent
+    ulimits:
+      nofile:
+        soft: 16384
+        hard: 16384
+    volumes:
+      - /tmp/control-center/data:/var/lib/confluent-control-center
